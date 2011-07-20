@@ -1,0 +1,27 @@
+#!/usr/bin/env python
+#
+# Tim Hawes
+# 8th January 2011
+#
+# Display the environment for a given PID
+
+import sys
+
+pids = sys.argv[1:]
+
+if pids:
+    for pid in pids:
+        try:
+            f = open("/proc/%s/environ" % (pid), "r")
+            data = f.read()
+        except IOError:
+            continue
+        for chunk in data.strip("\0").split("\0"):
+            try:
+                k, v = chunk.split("=", 1)
+                print "[%s] %s=%s" % (pid, k, v)
+            except ValueError:
+                print "[%s] %s=" % (pid, k)
+else:
+    print "Usage: %s pid [pid...]" % (sys.argv[0])
+    sys.exit(1)

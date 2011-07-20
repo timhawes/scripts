@@ -1,0 +1,20 @@
+#!/usr/bin/env python
+#
+# Tim Hawes
+# 20th June 2011
+#
+# Find sparse files within a directory tree
+
+import os
+import sys
+
+base = sys.argv[1]
+
+for root, dirs, files in os.walk(base):
+    for filename in files:
+        st = os.stat(os.path.join(root, filename))
+        file_size = st.st_size
+        allocated_size = st.st_blksize * st.st_blocks
+        if file_size > allocated_size:
+            print os.path.join(root, filename)
+
