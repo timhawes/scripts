@@ -1,0 +1,113 @@
+#!/usr/bin/python
+#
+# Tim Hawes
+# 9th May 2008
+#
+# Filter a list of filenames (usually from the find command)
+# based on the date encoded in the filename. Intended for use
+# in purging log files.
+
+import getopt
+import mx.DateTime
+import os
+import re
+import string
+import sys
+import time
+
+def usage():
+    sys.stderr.write("Usage: %s [-0] [--null] --older-than=DAYS\n" % (sys.argv[0]))
+    sys.exit(1)
+
+use_nulls  = False
+debug      = False
+older_than = None
+try:
+    options, args = getopt.gnu_getopt(sys.argv[1:], '0', ['null', 'debug', 'older-than='])
+except getopt.GetoptError, e:
+    sys.stderr.write(e.msg + "\n")
+    usage()
+for k, v in options:
+    if k in ['-0', '--null']:
+        use_nulls = True
+    elif k in ['--debug']:
+        debug = True
+    elif k in ['--older-than']:
+        older_than = int(v) * 86400
+
+if older_than <= 0:
+    usage()
+
+def parse_filename(filename):
+    m = re.search(u'([1-9]\d\d\d)(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])', filename)
+    if m:
+        timestamp = mx.DateTime.Parser.DateTimeFromString('%s-%s-%s' % (m.group(1), m.group(2), m.group(3)))
+        if timestamp:
+            return int(timestamp)
+    m = re.search(u'([1-9]\d\d\d)\-(0[1-9]|1[0-2])\-(0[1-9]|[12][0-9]|3[01])', filename)
+    if m:
+        timestamp = mx.DateTime.Parser.DateTimeFromString('%s-%s-%s' % (m.group(1), m.group(2), m.group(3)))
+        if timestamp:
+            return int(timestamp)
+    return None
+
+def line_reader(fh):
+    for line in fh:
+        yield line.rstrip()
+
+class line_writer:
+    def __init__(self, fh):
+        self.fh = fh
+    def write(self, data):
+        self.fh.write(data + '\n')
+    def flush(self):
+        self.fh.flush()
+    def close(self):
+        self.fh.close()
+                      
+def null_reader(fh):
+    buffer = []
+    for chunk in fh.read():
+        if ord(chunk) == 0:
+            yield string.join(buffer, '')
+            buffer = []
+        else:
+            buffer.append(chunk)
+
+class null_writer:
+    def __init__(self, fh):
+        self.fh = fh
+    def write(self, data):
+        self.fh.write(data + '\0')
+    def flush(self):
+        self.fh.flush()
+    def close(self):
+        self.fh.close()
+                      
+reader = None
+writer = None
+if use_nulls:
+    reader = null_reader(sys.stdin)
+    writer = null_writer(sys.stdout)
+else:
+    reader = line_reader(sys.stdin)
+    writer = line_writer(sys.stdout)
+    
+for path in reader:
+    if debug: sys.stderr.write(path)
+    filename = os.path.basename(path)
+    timestamp = parse_filename(filename)
+    if timestamp:
+        age = time.time() - timestamp
+        if debug: sys.stderr.write(' age=%d' % (age))
+        if age > older_than:
+            if debug: sys.stderr.write(' match')
+            writer.write(path)
+        else:
+            if debug: sys.stderr.write(' skipped')
+    else:
+        if debug: sys.stderr.write(' no-date')
+    if debug:
+        sys.stderr.write('\n')
+        sys.stderr.flush()
+    
