@@ -1,0 +1,63 @@
+#!/usr/bin/perl -w
+#
+# untar - version 0.1, 19th May 2003
+#
+# Copyright (C) 2003 Tim Hawes <me@timhawes.com>
+#
+# Extracts a single tarball, working out which compression tool
+# should be used, and handling archives that don't extract cleanly
+# to their own directories.
+#
+
+use strict;
+use File::Basename;
+use File::Temp qw/tempdir/;
+
+my $pathname = $ARGV[0];
+my $filename = basename($pathname);
+my $type;
+my $cmdt;
+my $cmdx;
+my $name;
+
+my $tempdir = tempdir(DIR => '.');
+
+if ( $filename =~ /^(.+)\.tar\.Z$/ ) {
+    $name = $1;
+    $cmdx = "tar xZpf $pathname -C $tempdir";
+} elsif ( $filename =~ /^(.+)\.(tar\.gz|tgz)$/ ) {
+    $name = $1;
+    $cmdx = "tar xzpf $pathname -C $tempdir";
+} elsif ( $filename =~ /^(.+)\.tar\.bz2$/ ) {
+    $name = $1;
+    $cmdx = "bzcat $pathname | tar xpf - -C $tempdir";
+} else {
+    rmdir $tempdir;
+    die "File suffix not recognised\n";
+}
+
+if ( -e $name ) {
+    rmdir $tempdir;
+    die "$name already exists\n";
+}
+
+system $cmdx;
+
+opendir(D, $tempdir);
+my @files = grep { ! /^\.\.?$/ } readdir(D);
+closedir(D);
+
+if ( $#files == -1 ) {
+    rmdir $tempdir;
+    die "No files extracted\n";
+} elsif ( $#files == 0 ) {
+    if ( $files[0] eq $name ) {
+	rename "$tempdir/$name", "$name";
+	rmdir $tempdir;
+    } else {
+	rename $tempdir, $name;
+    }
+} else {
+    rename $tempdir, $name;
+}
+
